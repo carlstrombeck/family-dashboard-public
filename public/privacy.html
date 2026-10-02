@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Privacy · Family dashboard</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body class="setup">
+<main>
+  <h1>Privacy policy</h1>
+  <section>
+    <p>This family dashboard is a private app for one family's kitchen display. Only family members invited by an
+    administrator can sign in. It is not offered to the public.</p>
+  </section>
+
+  <section>
+    <h2>What it accesses</h2>
+    <ul>
+      <li><strong>Google sign-in:</strong> your email address, to check that you are an invited family member.</li>
+      <li><strong>Google Calendar:</strong> events from the family's selected calendars, shown on the dashboard, and
+        events family members add from the dashboard. It only deletes events it created itself (the "Undo" button).</li>
+      <li><strong>Gmail (read-only):</strong> only SAS's EuroBonus emails, to show the points balance and tier. No mail is
+        shown on the dashboard or stored.</li>
+      <li><strong>Split:</strong> who owes whom in the family's own Split app, read from the same database.</li>
+      <li><strong>Google Keep:</strong> only notes shared with the family group (like the shopping list), which can be
+        viewed, ticked off, reordered and added to. An administrator can hide some of them. Other notes are never shown.</li>
+      <li><strong>Voice commands:</strong> the iPad's own speech recognition (Apple) turns speech into text. Only when
+        someone taps the microphone, or says the wake word with hands-free listening switched on, is that sentence sent to
+        Anthropic's Claude API together with today's date and the names of the family's lists and calendars, so it can
+        be turned into list items, calendar events or Split expenses. List contents, events and amounts already stored
+        are never sent.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>How data is used and stored</h2>
+    <ul>
+      <li>Data is only used to show it to signed-in family members on this dashboard.</li>
+      <li>It is not sold, used for advertising, or used to train AI models. Apart from voice commands (above), it is not
+        shared with third parties.</li>
+      <li>The only things stored are the Google sign-in tokens needed to stay connected, the list of invited
+        members, the ids of hidden Keep notes and a log of the last 50 voice commands (what was said and what it did, so it can be undone), in the family's own database (Supabase, EU region). Calendar, EuroBonus and Keep content is only kept
+        briefly in memory while the dashboard runs.</li>
+      <li>The app's use of information received from Google APIs adheres to the
+        <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>,
+        including the Limited Use requirements.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Removing access</h2>
+    <p>You can revoke the dashboard's access to your Google account at any time at
+    <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a>. An administrator can remove
+    you from the dashboard, which deletes your membership. Questions: contact the administrator who invited you.</p>
+  </section>
+  <p>Last updated 26 September 2026.</p>
+</main>
+</body>
+</html>

@@ -1,0 +1,13 @@
+services:
+  dashboard:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "8080:8080"
+    volumes:
+      # Named volume: Docker creates it owned by the container's non-root user.
+      - dashboard-data:/data
+
+volumes:
+  dashboard-data:

@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Family">
+  <meta name="theme-color" content="#f4f1ec" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0f0f10" media="(prefers-color-scheme: dark)">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <link rel="stylesheet" href="/styles.css">
+  <title>Family</title>
+  <script type="module" src="/app.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <button class="clock" id="clock" type="button" aria-label="Refresh">
+      <span class="time" id="time">--:--</span>
+    </button>
+    <div class="today-label">
+      <div class="weekday" id="weekday"></div>
+      <div class="fulldate" id="fulldate"></div>
+    </div>
+    <div class="weather" id="weather" hidden></div>
+    <div class="topbar-right">
+      <div class="family-title" id="family-title"></div>
+      <div class="status" id="status"><span class="dot"></span><span class="status-text"></span></div>
+      <div class="top-actions">
+      <button type="button" class="refresh" id="refresh" data-i18n-label="refresh"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.65 6.35A7.96 7.96 0 0 0 12 4a8 8 0 1 0 7.73 10h-2.08A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35Z"/></svg></button>
+      <div class="voice" id="voice" hidden>
+        <button type="button" class="hands-free" id="hands-free" aria-pressed="false">ASCA</button>
+        <button type="button" class="log" id="voice-log" data-i18n-label="voiceLog"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 3a9 9 0 0 0-9 9H1l3.89 3.89.07.14L9 12H6a7 7 0 1 1 2.05 4.95l-1.42 1.42A9 9 0 1 0 13 3Zm-1 5v5l4.25 2.52.77-1.28-3.52-2.09V8H12Z"/></svg></button>
+        <button type="button" class="mic" id="mic" data-i18n-label="voice"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3Zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.93V21h2v-2.07A7 7 0 0 0 19 12h-2Z"/></svg></button>
+      </div>
+      </div>
+      <a class="setup-link" id="setup-link" href="/setup" hidden><span aria-hidden="true">⚙&#xFE0E;</span> <span data-i18n="setup">Setup</span></a>
+    </div>
+  </header>
+
+  <main class="grid">
+    <section class="panel calendar" id="calendar-panel">
+      <header class="panel-head">
+        <h2 data-i18n="calendar">Calendar</h2>
+        <div class="view-switch" id="view-switch" role="group">
+          <button type="button" data-view="agenda" data-i18n="agenda">Agenda</button>
+          <button type="button" data-view="week" data-i18n="week">Week</button>
+        </div>
+        <div class="legend" id="legend"></div>
+        <button class="add-event" id="add-event" type="button" hidden data-i18n-label="addEvent">+</button>
+      </header>
+      <div class="panel-body" id="agenda"></div>
+    </section>
+
+    <div class="lists" id="lists"></div>
+
+    <div class="side" id="side">
+      <section class="panel accounts" id="accounts-panel">
+        <header class="panel-head">
+          <h2 data-i18n="accounts">Points &amp; balances</h2>
+          <a class="panel-link" id="finances-link" hidden target="_blank" rel="noopener"><span data-i18n="finances">Family finances</span> <span aria-hidden="true">↗</span></a>
+        </header>
+        <div class="panel-body" id="accounts"></div>
+      </section>
+      <div class="lists" id="more-lists"></div>
+    </div>
+  </main>
+
+  <div class="overlay" id="unlock" hidden>
+    <div class="unlock-card">
+      <h2 data-i18n="signInTitle">Family dashboard</h2>
+      <a class="google-button" id="google-signin" href="/auth/login" hidden data-i18n="signInGoogle">Sign in with Google</a>
+      <form id="unlock-form" hidden>
+        <input id="unlock-key" type="password" autocomplete="current-password" required data-i18n-placeholder="accessKey">
+        <button type="submit" data-i18n="unlock">Unlock</button>
+      </form>
+      <p class="unlock-error" id="unlock-error" hidden></p>
+    </div>
+  </div>
+
+  <div class="overlay sheet" id="event-sheet" hidden>
+    <form class="event-card" id="event-form" novalidate>
+      <h2 data-i18n="newEvent">New event</h2>
+      <input id="ev-title" maxlength="200" autocomplete="off" enterkeyhint="next" data-i18n-placeholder="eventTitle">
+      <div class="chips" id="ev-days">
+        <button type="button" class="chip" data-offset="0" data-i18n="today">Today</button>
+        <button type="button" class="chip" data-offset="1" data-i18n="tomorrow">Tomorrow</button>
+        <input type="date" id="ev-date">
+      </div>
+      <div class="ev-when">
+        <label class="ev-allday"><input type="checkbox" id="ev-allday"> <span data-i18n="allDay">All day</span></label>
+        <span class="ev-times" id="ev-times"><input type="time" id="ev-start" step="300"> – <input type="time" id="ev-end" step="300"></span>
+      </div>
+      <div class="chips" id="ev-calendars"></div>
+      <input id="ev-location" maxlength="200" autocomplete="off" data-i18n-placeholder="eventPlace">
+      <p class="unlock-error" id="ev-error" hidden></p>
+      <div class="sheet-actions">
+        <button type="button" class="secondary" id="ev-cancel" data-i18n="cancel">Cancel</button>
+        <button type="submit" id="ev-save" data-i18n="add">Add</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="overlay sheet" id="voice-sheet" hidden>
+    <div class="event-card voice-card">
+      <h2 id="vs-title"></h2>
+      <div class="voice-body" id="vs-body"></div>
+      <div class="sheet-actions"><button type="button" id="vs-close" data-i18n="close">Stäng</button></div>
+    </div>
+  </div>
+  <div class="voice-bubble" id="voice-bubble" hidden></div>
+  <div class="toast" id="toast" hidden></div>
+</body>
+</html>

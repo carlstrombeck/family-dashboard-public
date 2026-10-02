@@ -1,0 +1,9 @@
+.env
+data
+docs
+tests
+scripts
+Dockerfile
+docker-compose.yml
+requirements-dev.txt
+supabase
