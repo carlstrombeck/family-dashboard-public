@@ -385,6 +385,21 @@ h2 { margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -0.01em; }
   padding: 6px 12px;
   border-radius: 999px;
 }
+#agenda.loading { opacity: 0.4; transition: opacity 0.2s; }
+.week-nav { display: inline-flex; flex: none; align-items: center; padding: 3px; border-radius: 999px; background: var(--bg); }
+.week-nav button {
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  padding: 6px 10px;
+  border-radius: 999px;
+}
+.week-nav #week-prev, .week-nav #week-next { font-size: 20px; line-height: 1; padding: 4px 12px 6px; }
+.week-nav .week-label { color: var(--muted); min-width: 4.5em; }
+.week-nav .week-label.away { background: var(--panel); color: var(--text); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12); }
 .view-switch button.on { background: var(--panel); color: var(--text); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12); }
 
 /* week view: seven columns, hours scaled to the week's events */

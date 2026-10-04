@@ -4,6 +4,7 @@ const CALENDAR_DAYS = 7;
 const WEEK_MIN_HOURS = 6; // the week view never zooms in closer than this
 const WEEK_DEFAULT_HOURS = [8, 18]; // when the week has no timed events
 const VIEW_KEY = "calendarView";
+const BACK_TO_TODAY_MS = 2 * 60_000; // a browsed week returns to today after two minutes untouched
 const REFRESH = { calendar: 5 * 60_000, lists: 30_000, weather: 15 * 60_000, accounts: 30 * 60_000 };
 const TOMORROW_WEATHER_FROM = 20; // from 20:00 the header shows tomorrow's weather
 const REQUEST_TIMEOUT = 20_000;
@@ -33,6 +34,7 @@ const STRINGS = {
     close: "Close", refresh: "Refresh", voiceLog: "Voice commands", noVoiceLog: "No voice commands yet.", undone: "Undone",
     answered: "Answered", weatherShown: "Showed the weather", micBlocked: "The microphone is blocked. Allow it in Safari's settings for this site.",
     heardNothing: "Didn't catch that.", voiceFailed: "Speech recognition failed",
+    prevWeek: "Previous week", nextWeek: "Next week",
   },
   sv: {
     calendar: "Kalender", agenda: "Schema", today: "Idag", tomorrow: "Imorgon", allDay: "Heldag",
@@ -57,6 +59,7 @@ const STRINGS = {
     close: "Stäng", refresh: "Uppdatera", voiceLog: "Röstkommandon", noVoiceLog: "Inga röstkommandon än.", undone: "Ångrat",
     answered: "Svarade", weatherShown: "Visade vädret", micBlocked: "Mikrofonen är blockerad. Tillåt den i Safaris inställningar för sidan.",
     heardNothing: "Jag hörde inget.", voiceFailed: "Taligenkänningen fungerade inte",
+    prevWeek: "Föregående vecka", nextWeek: "Nästa vecka",
   },
 };
 
@@ -66,6 +69,8 @@ const state = {
   config: {},
   calendar: null, calendarError: null,
   view: "agenda", // or "week"
+  weekOffset: 0, // weeks from today being browsed; the calendar data carries the offset it was loaded for
+  lastTouch: Date.now(),
   lists: null, listsError: null,
   pendingWrites: 0,
   lingering: new Map(), // item id -> time it may leave the open list
@@ -221,8 +226,12 @@ function tickClock() {
   $("fulldate").textContent = `${fmt.date.format(now)} · ${t.week} ${isoWeek(now)}`;
 
   const dayKey = now.toDateString();
-  if (state.dayKey && dayKey !== state.dayKey) loadCalendar(); // midnight: move the week along
+  if (state.dayKey && dayKey !== state.dayKey) { // midnight: move the week along
+    renderWeekNav();
+    loadCalendar();
+  }
   state.dayKey = dayKey;
+  if (state.weekOffset && Date.now() - state.lastTouch > BACK_TO_TODAY_MS) showWeek(0);
 
   if (now.getMinutes() !== state.minute) {
     state.minute = now.getMinutes();
@@ -247,17 +256,41 @@ function renderStatus() {
 // ---------- calendar ----------
 
 async function loadCalendar() {
-  const start = startOfDay(new Date());
+  const offset = state.weekOffset;
+  const start = addDays(startOfDay(new Date()), offset * CALENDAR_DAYS);
   const end = addDays(start, CALENDAR_DAYS);
   const query = new URLSearchParams({ start: isoLocal(start), end: isoLocal(end) });
   try {
-    state.calendar = await api(`/api/calendar?${query}`);
+    const data = await api(`/api/calendar?${query}`);
+    if (offset !== state.weekOffset) return; // the week was changed while this loaded
+    state.calendar = { ...data, offset };
     state.calendarError = null;
   } catch (err) {
+    if (offset !== state.weekOffset) return;
     // Keep showing what we have if the network blipped.
-    if (!(err.code === "network" && state.calendar)) state.calendarError = err;
+    if (!(err.code === "network" && state.calendar && state.calendar.offset === offset)) state.calendarError = err;
   }
   renderCalendar();
+}
+
+// Seven days at a time: offset 0 is today and the six days after it.
+function showWeek(offset) {
+  if (offset === state.weekOffset) return;
+  state.weekOffset = offset;
+  renderWeekNav();
+  renderCalendar(); // dims the old week until the new one arrives
+  loadCalendar();
+}
+
+function renderWeekNav() {
+  const start = addDays(startOfDay(new Date()), state.weekOffset * CALENDAR_DAYS);
+  const last = addDays(start, CALENDAR_DAYS - 1);
+  const label = $("week-label");
+  label.textContent = state.weekOffset === 0 ? t.today
+    : fmt.shortDate.formatRange ? fmt.shortDate.formatRange(start, last)
+    : `${fmt.shortDate.format(start)} – ${fmt.shortDate.format(last)}`;
+  label.classList.toggle("away", state.weekOffset !== 0);
+  label.disabled = state.weekOffset === 0;
 }
 
 function eventRow(event, dayStart, dayEnd, now, color) {
@@ -298,6 +331,7 @@ function renderCalendar() {
   const legend = $("legend");
   const week = state.view === "week";
   $("calendar-panel").classList.toggle("week-mode", week);
+  agenda.classList.toggle("loading", !!state.calendar && state.calendar.offset !== state.weekOffset);
   document.body.classList.toggle("week-view", week);
   for (const button of $("view-switch").children) {
     button.classList.toggle("on", button.dataset.view === state.view);
@@ -322,7 +356,8 @@ function renderCalendar() {
   const today = startOfDay(now);
   const colorOf = (e) => colors[e.calendar] || "#8e8e93";
   const days = [];
-  for (let i = 0; i < CALENDAR_DAYS; i++) {
+  const first = (data.offset || 0) * CALENDAR_DAYS; // days from today; i 0 is today, 1 tomorrow
+  for (let i = first; i < first + CALENDAR_DAYS; i++) {
     const dayStart = addDays(today, i);
     const dayEnd = addDays(today, i + 1);
     days.push({ i, dayStart, dayEnd, events: eventsOn(events, dayStart, dayEnd) });
@@ -468,6 +503,21 @@ function weekView(days, now, colorOf) {
     h("div", { class: "wk-row wk-heads" }, h("div"), heads),
     h("div", { class: "wk-row wk-allday" }, h("div"), allDay),
     h("div", { class: "wk-row wk-body" }, lines, h("div", { class: "wk-hours" }, hours), columns));
+}
+
+// A sideways swipe on the calendar goes to the next or previous week.
+function swipeWeeks(el) {
+  let from = null;
+  el.addEventListener("touchstart", (e) => {
+    from = e.touches.length === 1 ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : null;
+  }, { passive: true });
+  el.addEventListener("touchend", (e) => {
+    if (!from) return;
+    const dx = e.changedTouches[0].clientX - from.x;
+    const dy = e.changedTouches[0].clientY - from.y;
+    from = null;
+    if (Math.abs(dx) > 80 && Math.abs(dx) > 2 * Math.abs(dy)) showWeek(state.weekOffset + (dx < 0 ? 1 : -1));
+  }, { passive: true });
 }
 
 function savedView() {
@@ -1485,6 +1535,11 @@ async function init() {
   renderAccounts();
   state.view = savedView();
   for (const button of $("view-switch").children) button.addEventListener("click", () => setView(button.dataset.view));
+  renderWeekNav();
+  $("week-prev").addEventListener("click", () => showWeek(state.weekOffset - 1));
+  $("week-next").addEventListener("click", () => showWeek(state.weekOffset + 1));
+  $("week-label").addEventListener("click", () => showWeek(0));
+  swipeWeeks($("agenda"));
 
   $("refresh").addEventListener("click", async () => {
     $("refresh").classList.add("spinning");
@@ -1495,7 +1550,7 @@ async function init() {
     try { await api("/api/refresh", { method: "POST" }); } catch { /* status shows it */ }
     loadAll();
   });
-  document.addEventListener("pointerdown", keepAwake, { passive: true });
+  document.addEventListener("pointerdown", () => { state.lastTouch = Date.now(); keepAwake(); }, { passive: true });
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") {
       keepAwake();
