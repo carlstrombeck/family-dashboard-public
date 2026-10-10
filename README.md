@@ -230,6 +230,20 @@ How it works: Safari's speech recognition (`sv-SE`) turns speech into text on th
 
 Speech recognition runs in Safari. It needs Dictation switched on in iPadOS settings, and it can be unreliable in a Home Screen web app; if the mic stays on "Listening…", the reason is sent to the server log.
 
+### Evals
+
+The voice assistant has its own evals: about 30 spoken commands with known right answers, run against the real Claude API. Each case checks what matters with hard rules: the right list or calendar, exact dates and times (including the switch from summer time), the amount in öre, a clarifying question when the payer is missing. Free text such as item wording, titles and answers is checked with keywords and limits, never word for word.
+
+```sh
+ANTHROPIC_API_KEY=... python -m evals.run                # every case, 3 runs each
+python -m evals.run --only event --repeats 5              # one tag or case id
+```
+
+Each case runs three times because the model isn't deterministic; a case that passes some runs and fails others is reported as **FLAKY**. The run prints the failures, a pass rate per tag and the overall rate, and saves everything to `evals/results/latest.json`. It costs about $0.20.
+
+- **Your own commands:** open `/api/voice/log` while signed in, save it as `voice_log.json`, then `python -m evals.from_log voice_log.json`. That drafts `evals/private_cases.json` from what the assistant actually did. Correct the ones it got wrong and remove `"review": true`; the file is gitignored, so the family's commands stay on your machine.
+- **GitHub Actions:** `.github/workflows/evals.yml` runs the evals when `app/assistant.py` or `evals/` changes and every Monday, and fails below a 90% pass rate. Add an Anthropic key as the repository secret `DASHBOARD_EVALS`, ideally a separate key just for evals; without it only the unit tests run.
+
 ## Split (optional)
 
 Split is a separate little app of ours for two people who share costs in proportion to their incomes. It isn't part of this repo, but the dashboard can show its balance and add expenses by voice when Split's tables (`split_incomes`, `split_entries`) are in the same Supabase project. Set `SPLIT_PEOPLE` to its two person ids and names, e.g. `SPLIT_PEOPLE=alex=Alex,sam=Sam`, `SPLIT_RATIO_COLUMN` to the column holding the first person's share, and `FINANCES_URL` to its address for a link in the balances panel. Without them, both stay off.
@@ -267,6 +281,7 @@ app/
   voicelog.py     the log of voice commands, and undo
   cache.py        a small in-memory cache
   demo.py         sample data for DEMO_MODE
+evals/            assistant evals: cases.json, run.py, score.py, from_log.py
 public/           the dashboard page (plain HTML/CSS/JS, no build step)
 supabase/         migration for the storage table
 scripts/          keep_master_token.py
