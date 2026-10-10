@@ -1,0 +1,44 @@
+name: Assistant evals
+
+# Runs the voice-assistant evals against the real Claude API when the prompt, the tools or the
+# cases change, and every Monday to catch drift on the model's side. About 30 cases x 3 runs with
+# Claude Haiku 4.5, roughly $0.20 a run. Needs the repository secret ANTHROPIC_API_KEY.
+on:
+  pull_request:
+    paths: ["app/assistant.py", "evals/**"]
+  push:
+    branches: [main]
+    paths: ["app/assistant.py", "evals/**"]
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+jobs:
+  evals:
+    runs-on: ubuntu-latest
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements-dev.txt
+      - run: python -m pytest -q
+      - name: Evals
+        if: env.ANTHROPIC_API_KEY != ''
+        shell: bash  # pipefail, so a failing eval run fails the step despite tee
+        run: python -m evals.run --repeats 3 --min 0.9 | tee evals-summary.txt
+      - name: Summary
+        if: always()
+        run: |
+          if [ -f evals-summary.txt ]; then
+            { echo '```'; cat evals-summary.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: eval-results
+          path: evals/results/latest.json
+          if-no-files-found: ignore

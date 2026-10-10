@@ -5,3 +5,8 @@ __pycache__/
 .pytest_cache/
 .venv/
 venv/
+
+# Evals: your own voice commands and run results stay local
+evals/private_cases.json
+evals/results/
+voice_log.json
