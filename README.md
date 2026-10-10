@@ -7,7 +7,7 @@ An always-on kitchen dashboard for an iPad: the family's week from Google Calend
   <img alt="The dashboard on an iPad in landscape, with demo data" src="docs/screenshot.png">
 </picture>
 
-- **Calendar:** today and the next six days from the calendars you choose, colour-coded, with the ISO week number. Switch between **Agenda** (a list per day) and **Week** (seven columns on a time grid that zooms to the hours the week's events cover). Tap **+** to add an event; the toast has an **Undo**.
+- **Calendar:** today and the next six days from the calendars you choose, colour-coded, with the ISO week number. Switch between **Agenda** (a list per day) and **Week** (seven columns on a time grid that zooms to the hours the week's events cover). **‹ ›** (or a sideways swipe) browse earlier and later weeks; the dashboard returns to today after two minutes untouched. Tap **+** to add an event; the toast has an **Undo**.
 - **Lists:** Google Keep notes shared with your family. Tick items off, add new ones, or drag them into a new order. Changes reach Keep on your phones within seconds.
 - **Voice:** tap the mic, or switch on hands-free and start with the wake word. It adds list items, calendar events and shared expenses, shows the weather, answers questions ("hur gör man pannkakor?") in a card, and reads its answer aloud. "Ångra" undoes the last command, and a log shows the last 50.
 - **Weather** in the header, and **points & balances**: EuroBonus points from SAS's emails, and who owes whom in Split, a companion cost-sharing app (optional).
