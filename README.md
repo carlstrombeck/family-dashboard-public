@@ -242,7 +242,7 @@ python -m evals.run --only event --repeats 5              # one tag or case id
 Each case runs three times because the model isn't deterministic; a case that passes some runs and fails others is reported as **FLAKY**. The run prints the failures, a pass rate per tag and the overall rate, and saves everything to `evals/results/latest.json`. It costs about $0.20.
 
 - **Your own commands:** open `/api/voice/log` while signed in, save it as `voice_log.json`, then `python -m evals.from_log voice_log.json`. That drafts `evals/private_cases.json` from what the assistant actually did. Correct the ones it got wrong and remove `"review": true`; the file is gitignored, so the family's commands stay on your machine.
-- **GitHub Actions:** `.github/workflows/evals.yml` runs the evals when `app/assistant.py` or `evals/` changes and every Monday, and fails below a 90% pass rate. Add `ANTHROPIC_API_KEY` as a repository secret; without it only the unit tests run.
+- **GitHub Actions:** `.github/workflows/evals.yml` runs the evals when `app/assistant.py` or `evals/` changes and every Monday, and fails below a 90% pass rate. Add an Anthropic key as the repository secret `DASHBOARD_EVALS`, ideally a separate key just for evals; without it only the unit tests run.
 
 ## Split (optional)
 

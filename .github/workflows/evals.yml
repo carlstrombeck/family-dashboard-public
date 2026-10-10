@@ -2,7 +2,7 @@ name: Assistant evals
 
 # Runs the voice-assistant evals against the real Claude API when the prompt, the tools or the
 # cases change, and every Monday to catch drift on the model's side. About 30 cases x 3 runs with
-# Claude Haiku 4.5, roughly $0.20 a run. Needs the repository secret ANTHROPIC_API_KEY.
+# Claude Haiku 4.5, roughly $0.20 a run. Needs the repository secret DASHBOARD_EVALS (an Anthropic key).
 on:
   pull_request:
     paths: ["app/assistant.py", "evals/**"]
@@ -17,7 +17,7 @@ jobs:
   evals:
     runs-on: ubuntu-latest
     env:
-      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      ANTHROPIC_API_KEY: ${{ secrets.DASHBOARD_EVALS }}  # a separate, revocable key just for evals
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
