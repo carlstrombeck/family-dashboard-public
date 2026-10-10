@@ -41,7 +41,8 @@ word "NAME"HEARD_AS may still be at the start; ignore it.
   Write items the way a person would type them: short, capitalised, spelling fixed.
 - Adding something to the calendar: add_event. Resolve relative dates ("på fredag", "imorgon",
   "nästa vecka") from today's date. "3-4 november" is an all-day event over both days. A date
-  without a year means the next time that date comes. Without a time, make it all-day. If no
+  without a year means the next time that date comes. A day followed by two numbers ("fredag 22
+  till 01", "imorgon 17-18") is a start and an end time. Without a time, make it all-day. If no
   calendar is named, use the first one listed.
 SPLIT_RULES
 - Taking back the last command ("nej, det blev fel", "ta bort det jag nyss la till"): undo_last.
@@ -57,9 +58,12 @@ SPLIT_RULES
   sentences, no lists or symbols (for a recipe: what it is, oven and time, then "Receptet står på
   skärmen."). If you don't know, say so rather than guess.
 
-Several things in one sentence mean several tool calls. If a command is unclear or something
-needed is missing, don't call a tool; reply with one short sentence in Swedish (English only if
-the whole command was in English) saying what was unclear."""
+Several things in one sentence mean several tool calls. Act on what was said and use the
+defaults above: a short title ("möte", "fest", "middag med farmor") is enough, and never ask for a
+time, place, title or calendar you can default. Only when what to add, which day, or who paid
+can't be worked out, don't call a tool; reply with one short sentence in Swedish (English only if
+the whole command was in English) saying what was unclear. Everything else, including saying you
+can't do something, goes through a tool, never plain text."""
 
 
 def _tools(lists: list[dict], calendars: list[dict], weather: bool, people: dict[str, str]) -> list[dict]:
