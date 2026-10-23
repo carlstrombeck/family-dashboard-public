@@ -561,8 +561,11 @@ function openEventSheet() {
   $("ev-start").value = `${pad(start.getHours())}:00`;
   $("ev-end").value = `${pad(end.getHours())}:00`;
   $("ev-error").hidden = true;
+  // The default calendar (DEFAULT_CALENDAR) unless it isn't shown, then the last one used.
+  const wanted = (state.config.defaultCalendar || "").toLowerCase();
+  const preferred = calendars.find((c) => wanted && (c.id.toLowerCase() === wanted || c.name.toLowerCase() === wanted));
   const remembered = rememberedCalendar();
-  const selected = calendars.some((c) => c.id === remembered) ? remembered : calendars[0].id;
+  const selected = preferred ? preferred.id : calendars.some((c) => c.id === remembered) ? remembered : calendars[0].id;
   $("ev-calendars").replaceChildren(...calendars.map((c) => h("button", {
     type: "button", class: `chip${c.id === selected ? " on" : ""}`, "data-id": c.id,
     onclick: (event) => {

@@ -222,3 +222,37 @@ def test_settings_for_other_families():
     sent = fake.requests[0]
     assert "You are Kompis" in sent["system"] and "betalade" not in sent["system"]
     assert "add_expense" not in {t["name"] for t in sent["tools"]}  # no Split people, no expenses
+
+
+def test_default_calendar_comes_first_for_claude_and_the_add_sheet():
+    fake = FakeClaude(text("?"))
+    settings = Settings(demo=True, data_dir=Path(tempfile.mkdtemp()), default_calendar="kids")
+    c = TestClient(main.create_app(settings, assistant=Assistant("k", client=fake)))
+    assert c.get("/api/config").json()["defaultCalendar"] == "kids"
+    c.post("/api/assistant", json={"text": "lägg in tandläkare på fredag"})
+    sent = fake.requests[0]
+    assert '"calendars": ["Kids", "Family", "Work"]' in sent["messages"][0]["content"]
+    event_tool = next(t for t in sent["tools"] if t["name"] == "add_event")
+    assert event_tool["input_schema"]["properties"]["calendar_id"]["enum"][0] == "kids"
+
+
+def test_failed_commands_are_kept_in_the_voice_log(monkeypatch):
+    from app.assistant import AssistantError
+
+    c, _ = app_with(tool("add_event", calendar_id="family", title="Möte", start_date="2026-11-03",
+                         end_date=None, start_time="10:00", end_time=None, location=None))
+    monkeypatch.setattr(demo, "add_event", lambda *_: (_ for _ in ()).throw(RuntimeError("boom")))
+    result = c.post("/api/assistant", json={"text": "lägg in möte"}).json()
+    assert result["done"] == [] and result["failed"] == ["Kunde inte lägga till händelsen i kalendern."]
+
+    def broken(*_args, **_kwargs):
+        raise AssistantError("AI-tjänsten svarade inte. Försök igen.")
+
+    monkeypatch.setattr(Assistant, "plan", broken)
+    result = c.post("/api/assistant", json={"text": "lägg in middag"}).json()
+    assert result["failed"] == ["AI-tjänsten svarade inte. Försök igen."]
+    log = c.get("/api/voice/log").json()["entries"]
+    assert [(e["text"], e["failed"]) for e in log[:2]] == [
+        ("lägg in middag", ["AI-tjänsten svarade inte. Försök igen."]),
+        ("lägg in möte", ["Kunde inte lägga till händelsen i kalendern."]),
+    ]

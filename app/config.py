@@ -30,6 +30,7 @@ class Settings:
     google_refresh_token: str = ""
 
     calendars: tuple[str, ...] = ()
+    default_calendar: str = ""  # where events go unless another calendar is named
 
     keep_email: str = ""
     keep_master_token: str = ""
@@ -124,6 +125,7 @@ def load_settings(env: Mapping[str, str] = os.environ) -> Settings:
         google_redirect_uri=_redirect_uri(env, defaults.google_redirect_uri),
         google_refresh_token=env.get("GOOGLE_REFRESH_TOKEN", "").strip(),
         calendars=_list(env.get("CALENDARS")),
+        default_calendar=env.get("DEFAULT_CALENDAR", "").strip(),
         keep_email=env.get("KEEP_EMAIL", "").strip(),
         keep_master_token=env.get("KEEP_MASTER_TOKEN", "").strip(),
         keep_lists=_list(env.get("KEEP_LISTS")) or defaults.keep_lists,

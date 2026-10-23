@@ -194,6 +194,7 @@ All settings are environment variables: Vercel's project settings, or `.env` wit
 | `GOOGLE_REDIRECT_URI` | Vercel production domain, else `http://localhost:8080/auth/google/callback` | Must be listed on the OAuth client. |
 | `GOOGLE_REFRESH_TOKEN` | | Overrides the stored token. |
 | `CALENDARS` | calendars ticked in Google | Names or IDs, comma-separated; `Name=Short name` renames. |
+| `DEFAULT_CALENDAR` | first writable calendar | Name or ID of the calendar new events go to, by voice or **+**, unless another one is named. |
 | `KEEP_EMAIL` / `KEEP_MASTER_TOKEN` | | From step 2. |
 | `KEEP_LISTS` | `family` | `family`, `shared`, or note titles, comma-separated. |
 | `WEATHER_LAT` / `WEATHER_LON` / `WEATHER_PLACE` | *(off)* | Weather in the header (Open-Meteo, no key). From 20:00 it shows tomorrow. |

@@ -40,6 +40,8 @@ NEXT_COOKIE = "fd_next"
 MAX_RANGE = timedelta(days=42)
 MAX_EVENT_LENGTH = timedelta(days=31)
 SPLIT_CACHE = "split_balance"
+FAILED_SV = {"event": "Kunde inte lägga till händelsen i kalendern.", "list_items": "Kunde inte lägga till i listan.",
+             "expense": "Kunde inte spara utgiften i Split."}
 CHECKLISTS_CACHE = "voice_checklists"
 KEEP_HIDDEN = "keep_hidden"  # store key: ids of family notes an admin hid on /setup
 
@@ -74,6 +76,12 @@ def _event_body(event: NewEvent) -> dict:
     if end - start > MAX_EVENT_LENGTH:
         raise ApiError(400, "bad_time", "Events can be at most 31 days long.")
     return gcal.event_body(title, start, end, " ".join(event.location.split()))
+
+
+def default_first(calendars: list[dict], default: str) -> list[dict]:
+    """The default calendar (matched by id or name) first; the assistant uses the first one unless told otherwise."""
+    key = default.casefold()
+    return sorted(calendars, key=lambda c: not key or key not in (c["id"].casefold(), c["name"].casefold()))
 
 
 class ApiError(Exception):
@@ -267,6 +275,7 @@ def create_app(
             "assistant": assistant is not None and {"name": assistant.name, "aliases": list(settings.assistant_aliases)},
             "split": dict(settings.split_people) or None,
             "financesUrl": settings.finances_url,
+            "defaultCalendar": settings.default_calendar or None,
         }
 
     @app.get("/api/calendar")
@@ -310,7 +319,11 @@ def create_app(
                 raise ApiError(400, "not_writable", "Events can't be added to that calendar.")
             return gcal.create_event(session, event.calendar, body)
 
-        created = with_google(create)
+        try:
+            created = with_google(create)
+        except ApiError as exc:
+            log.warning("Could not add an event to %s: %s %s", event.calendar, exc.code, exc.message)
+            raise
         forget_events()
         return created
 
@@ -414,14 +427,18 @@ def create_app(
 
     def writable_calendars() -> list[dict]:
         if settings.demo:
-            return [{"id": c["id"], "name": c["name"]} for c in demo.CALENDARS if c["writable"]]
-        if not google.can_add_events:
+            found = [{"id": c["id"], "name": c["name"]} for c in demo.CALENDARS if c["writable"]]
+        elif not google.can_add_events:
+            log.warning("Voice commands can't add events: Google was connected without calendar write access")
             return []
-        try:
-            chosen = with_google(lambda session: gcal.choose_calendars(calendar_list(session), settings.calendars)[0])
-        except ApiError:
-            return []
-        return [{"id": c.id, "name": c.name} for c in chosen if c.writable]
+        else:
+            try:
+                chosen = with_google(lambda session: gcal.choose_calendars(calendar_list(session), settings.calendars)[0])
+            except ApiError as exc:
+                log.warning("Voice commands can't see the calendars: %s", exc.message)
+                return []
+            found = [{"id": c.id, "name": c.name} for c in chosen if c.writable]
+        return default_first(found, settings.default_calendar)
 
     def remember_checklists(shown: list[dict]) -> None:
         """The iPad polls /api/lists every 30 s; keep the list names for voice commands from that."""
@@ -533,15 +550,19 @@ def create_app(
         try:
             plan = assistant.plan(text, *names, zone, datetime.now(zone),
                                   weather=settings.demo or settings.weather_configured)
-        except AssistantError as exc:
-            raise ApiError(502, "assistant_error", str(exc)) from exc
+        except AssistantError as exc:  # logged too, so a failed command shows up in the voice log
+            return finish_command(request, text, zone, [], [str(exc)], "")
         planned = time.monotonic()
         done, failed = [], []
         for action in plan.actions:
             try:
                 done.append(carry_out(action))
             except ApiError as exc:
+                log.warning("Voice command %s failed: %s %s", action["type"], exc.code, exc.message)
                 failed.append(exc.message)
+            except Exception:
+                log.exception("Voice command %s failed", action["type"])
+                failed.append(FAILED_SV.get(action["type"], "Något gick fel. Försök igen."))
         finished = time.monotonic()
         log.info("Voice command timing: names %.1fs, Claude %.1fs, actions %.1fs (%s), total %.1fs",
                  context_done - started, planned - context_done, finished - planned,
