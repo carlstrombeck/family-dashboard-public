@@ -552,7 +552,8 @@ function openEventSheet() {
   const calendars = ((state.calendar && state.calendar.calendars) || []).filter((c) => c.writable);
   if (!calendars.length) return;
   const now = new Date();
-  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours() + 1);
+  // The next full hour, on the first day of the week being shown.
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() + state.weekOffset * CALENDAR_DAYS, now.getHours() + 1);
   const end = new Date(start.getTime() + 3_600_000);
   $("ev-title").value = "";
   $("ev-location").value = "";
