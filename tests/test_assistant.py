@@ -161,6 +161,35 @@ def test_voice_problems_are_logged(caplog):
     r = c.post("/api/voice/report", json={"problem": "no-result-in-8s", "standalone": True})
     assert r.status_code == 200
     assert "no-result-in-8s" in caplog.text and "home screen app: True" in caplog.text
+    entry = c.get("/api/voice/log").json()["entries"][0]
+    assert entry["text"] == "" and entry["failed"] == ["Taligenkänningen misslyckades (no-result-in-8s)"]
+
+
+def test_a_dropped_connection_to_claude_is_retried_once(caplog):
+    import anthropic
+    import httpx
+
+    class Flaky(FakeClaude):
+        def __init__(self, failures, *blocks):
+            super().__init__(*blocks)
+            self.failures = failures
+
+        def _create(self, **kwargs):
+            if self.failures:
+                self.failures -= 1
+                raise anthropic.APITimeoutError(request=httpx.Request("POST", "https://api.anthropic.com"))
+            return super()._create(**kwargs)
+
+    lists = [{"id": "shop", "title": "Inköp"}]
+    now = datetime(2026, 10, 25, 8, 10, tzinfo=STOCKHOLM)
+    claude = Flaky(1, tool("add_list_items", list_id="shop", items=["Rostad lök"]))
+    plan = Assistant("key", client=claude).plan("lägg till rostad lök", lists, [], STOCKHOLM, now)
+    assert plan.actions[0]["items"] == ["Rostad lök"] and len(claude.requests) == 1
+    assert "retrying on a new connection: APITimeoutError" in caplog.text
+
+    from app.assistant import AssistantError
+    with pytest.raises(AssistantError, match="Kunde inte nå"):
+        Assistant("key", client=Flaky(2)).plan("lägg till salt", lists, [], STOCKHOLM, now)
 
 
 def test_weather_and_questions_are_passed_to_the_ipad():

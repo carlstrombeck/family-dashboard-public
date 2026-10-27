@@ -161,6 +161,15 @@ class AssistantError(Exception):
     pass
 
 
+def _why(exc: Exception) -> str:
+    """The exception and what caused it, e.g. 'APITimeoutError <- ReadTimeout: ...', for the server log."""
+    parts = []
+    while exc is not None and len(parts) < 4:
+        parts.append(f"{type(exc).__name__}: {exc}" if str(exc) else type(exc).__name__)
+        exc = exc.__cause__ or exc.__context__
+    return " <- ".join(parts)
+
+
 @dataclass
 class Plan:
     actions: list[dict] = field(default_factory=list)
@@ -258,7 +267,10 @@ class Assistant:
         aliases: Sequence[str] = (), people: dict[str, str] | None = None,
     ) -> None:
         # A stuck request is retried soon, well within the iPad's 60 s wait.
-        self._client = client or anthropic.Anthropic(api_key=api_key, timeout=10.0, max_retries=2)
+        def fresh() -> anthropic.Anthropic:
+            return client or anthropic.Anthropic(api_key=api_key, timeout=10.0, max_retries=2)
+        self._fresh_client = fresh
+        self._client = fresh()
         self.name = name
         self._people = dict(people or {})  # Split's person ids -> names; empty turns expenses off
         self._system = system_prompt(name, aliases, self._people)
@@ -275,19 +287,27 @@ class Assistant:
             "lists": [lst["title"] for lst in lists],
             "calendars": [c["name"] for c in calendars],
         }
+        request = {
+            "model": MODEL,
+            "max_tokens": 2048,  # room for a recipe
+            "system": self._system,
+            "tools": _tools(lists, calendars, weather, self._people),
+            "messages": [{"role": "user", "content": f"{json.dumps(context, ensure_ascii=False)}\n\nCommand: {text}"}],
+        }
         try:
-            response = self._client.messages.create(
-                model=MODEL,
-                max_tokens=2048,  # room for a recipe
-                system=self._system,
-                tools=_tools(lists, calendars, weather, self._people),
-                messages=[{"role": "user", "content": f"{json.dumps(context, ensure_ascii=False)}\n\nCommand: {text}"}],
-            )
+            try:
+                response = self._client.messages.create(**request)
+            except anthropic.APIConnectionError as exc:
+                # The first command after a quiet night tends to fail like this: the server was frozen
+                # and its open connections to Anthropic went stale. Start over on new connections.
+                log.warning("Assistant request failed, retrying on a new connection: %s", _why(exc))
+                self._client = self._fresh_client()
+                response = self._client.messages.create(**request)
         except anthropic.APIStatusError as exc:
             log.warning("Assistant request failed (%s, request %s)", exc.status_code, exc.request_id)
             raise AssistantError("AI-tjänsten svarade inte. Försök igen.") from exc
         except anthropic.APIConnectionError as exc:
-            log.warning("Assistant request failed: %s", exc)
+            log.warning("Assistant request failed again: %s", _why(exc))
             raise AssistantError("Kunde inte nå AI-tjänsten. Försök igen.") from exc
         if response.stop_reason == "refusal":
             return Plan(reply="Det kan jag inte hjälpa till med.")

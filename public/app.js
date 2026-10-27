@@ -1429,7 +1429,7 @@ async function showVoiceLog() {
   const row = (entry) => h("li", { class: `log-entry${entry.undone ? " undone" : ""}` },
     h("div", { class: "log-when" }, when(entry.at)),
     h("div", { class: "log-main" },
-      h("div", { class: "log-said" }, `“${entry.text}”`),
+      h("div", { class: "log-said" }, entry.text ? `“${entry.text}”` : "🎤"), // speech recognition failed: nothing heard
       h("div", { class: "log-did" }, outcome(entry), entry.undone ? ` · ${t.undone}` : "")),
     entry.undoable && h("button", {
       type: "button",

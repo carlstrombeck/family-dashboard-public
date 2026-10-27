@@ -580,9 +580,14 @@ def create_app(
 
     @app.post("/api/voice/report")
     def voice_report(request: Request, problem: str = Body("", embed=True), standalone: bool = Body(False, embed=True)):
-        """Speech recognition runs in Safari; this puts its failures in the server log."""
+        """Speech recognition runs in Safari; this puts its failures in the server log and the voice log."""
         log.warning("Voice problem on the iPad: %s (home screen app: %s, %s)",
                     problem[:80], standalone, request.headers.get("user-agent", "")[:160])
+        voice_log.add({
+            "at": datetime.now(ZoneInfo("Europe/Stockholm")).isoformat(timespec="seconds"),
+            "who": request.state.user[0], "text": "", "done": [],
+            "failed": [f"Taligenkänningen misslyckades ({problem[:80] or 'okänt fel'})"], "reply": "", "undo": [],
+        })
         return {"ok": True}
 
     @app.delete("/api/split/expenses/{entry_id}")
