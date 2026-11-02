@@ -351,6 +351,7 @@ def test_old_session_is_renewed(tmp_path, google_login, monkeypatch):
     c, _ = signed_in_client(tmp_path, google_login, "alex@example.com")
     old = auth.make_session(auth.session_key(Settings(google_client_secret="secret")), "alex@example.com",
                             now=main.time.time() - auth.REFRESH_AFTER - 10)
+    c.cookies.clear()  # replace the fresh session from signing in; with both sent, the server reads the fresh one
     c.cookies.set("fd_session", old)
     r = c.get("/api/config")
     assert r.status_code == 200 and "fd_session=" in r.headers.get("set-cookie", "")
