@@ -44,6 +44,7 @@ FAILED_SV = {"event": "Kunde inte lägga till händelsen i kalendern.", "list_it
              "expense": "Kunde inte spara utgiften i Split."}
 CHECKLISTS_CACHE = "voice_checklists"
 KEEP_HIDDEN = "keep_hidden"  # store key: ids of family notes an admin hid on /setup
+EUROBONUS_MANUAL = "eurobonus_manual"  # store key: a balance typed in on /setup, {"value", "updated"}
 
 
 class NewEvent(BaseModel):
@@ -377,11 +378,20 @@ def create_app(
             items.append({"name": "Split", "value": split["amount"] / 100, "unit": "SEK", "decimals": 2,
                           "debtor": names.get(split["owes"]), "creditor": names.get(split["to"])})
         if settings.eurobonus:
+            found = None
             try:
                 found = cache.get_or_set("eurobonus", 3600, lambda: with_google(accounts.fetch_eurobonus))
-                items += [found] if found else []
             except ApiError:
                 log.warning("EuroBonus balance unavailable", exc_info=True)
+            try:
+                typed = store.get(EUROBONUS_MANUAL) or {}
+            except StoreError:
+                typed = {}
+            # Whichever is newer: SAS's latest email, or a balance typed in on /setup.
+            if typed.get("value") is not None and (not found or typed.get("updated", "") >= found.get("updated", "")):
+                found = {"name": "EuroBonus", "value": int(typed["value"]), "unit": "points",
+                         "detail": (found or {}).get("detail"), "updated": typed.get("updated")}
+            items += [found] if found else []
         return {"items": items}
 
     def with_keep(fn: Callable):
@@ -661,6 +671,20 @@ def create_app(
     def setup(request: Request, ok: str = "", error: str = ""):
         return _render_setup(settings, store, google, keep, members, request.state.user, calendar_list, ok, error)
 
+    @app.post("/setup/eurobonus")
+    def setup_eurobonus(points: str = Form("")):
+        """The balance from the SAS app, used until an email from SAS brings a newer one. Empty clears it."""
+        digits = "".join(ch for ch in points if ch.isdigit())
+        try:
+            if digits:
+                today = datetime.now(ZoneInfo("Europe/Stockholm")).date().isoformat()
+                store.set(EUROBONUS_MANUAL, {"value": int(digits), "updated": today})
+            else:
+                store.set(EUROBONUS_MANUAL, {})
+        except StoreError as exc:
+            return RedirectResponse("/setup?error=" + quote(str(exc)) + "#eurobonus", 303)
+        return RedirectResponse("/setup?ok=eurobonus#eurobonus", 303)
+
     @app.post("/setup/keep")
     def setup_keep(listed: list[str] = Form(default=[]), show: list[str] = Form(default=[])):
         """Save which of the listed notes are hidden; notes that weren't on the form keep their setting."""
@@ -690,6 +714,8 @@ def _render_setup(
         parts.append('<p class="notice ok">Google is connected.</p>')
     if ok == "keep":
         parts.append('<p class="notice ok">Saved which notes are shown.</p>')
+    if ok == "eurobonus":
+        parts.append('<p class="notice ok">Saved the EuroBonus balance.</p>')
     if error:
         parts.append(f'<p class="notice bad">{e(error)}</p>')
 
@@ -799,6 +825,22 @@ def _render_setup(
         except (KeepError, StoreError) as exc:
             parts.append(f'<p class="notice bad">{e(str(exc))}</p>')
     parts.append("</section>")
+
+    # EuroBonus
+    if settings.eurobonus:
+        try:
+            typed = store.get(EUROBONUS_MANUAL) or {}
+        except StoreError:
+            typed = {}
+        now = (f"Typed in: <strong>{typed['value']:,}</strong> points on {e(str(typed.get('updated')))}.".replace(",", " ")
+               if typed.get("value") is not None else "Nothing typed in; the balance comes from SAS's emails.")
+        parts.append('<section id="eurobonus"><h2>EuroBonus</h2>'
+                     "<p>The dashboard reads the balance from SAS's emails. If they stop coming, type in the balance "
+                     "from the SAS app here; the dashboard shows whichever is newer. Leave empty and save to stop using it.</p>"
+                     f"<p>{now}</p>"
+                     '<form method="post" action="/setup/eurobonus">'
+                     '<input name="points" inputmode="numeric" placeholder="e.g. 147 250" autocomplete="off">'
+                     '<button type="submit">Save</button></form></section>')
 
     body = "\n".join(parts)
     return f"""<!doctype html>

@@ -509,3 +509,20 @@ def test_apps_button_only_for_the_listed_accounts(tmp_path):
     c = TestClient(main.create_app(S(data_dir=tmp_path, demo=True, apps_url="https://asca.example.com/",
                                      apps_for=("carl@example.com",))))
     assert c.get("/api/config").json()["appsUrl"] is None  # "local network" isn't on the list
+
+
+def test_typed_in_eurobonus_balance_is_used_when_newer(tmp_path, monkeypatch):
+    from app import accounts
+    from app.config import Settings as S
+
+    monkeypatch.setattr(accounts, "fetch_eurobonus", lambda _s: {"name": "EuroBonus", "value": 146553, "unit": "points",
+                                                                "detail": "Silver", "updated": "2026-09-17"})
+    app = main.create_app(S(data_dir=tmp_path))
+    c = TestClient(app)
+    monkeypatch.setattr(main, "datetime", type("D", (), {"now": staticmethod(lambda tz=None: __import__("datetime").datetime(2026, 11, 7))}))
+    assert c.post("/setup/eurobonus", data={"points": "147 250"}, follow_redirects=False).status_code == 303
+    assert "147 250" in c.get("/setup").text
+    shown = [i for i in c.get("/api/accounts").json()["items"] if i["name"] == "EuroBonus"]
+    assert shown and shown[0]["value"] == 147250 and shown[0]["updated"] == "2026-11-07"
+    c.post("/setup/eurobonus", data={"points": ""})
+    assert "Nothing typed in" in c.get("/setup").text
