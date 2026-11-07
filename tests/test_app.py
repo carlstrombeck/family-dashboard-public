@@ -500,3 +500,12 @@ def test_read_only_connection_must_reconnect_to_add(tmp_path, monkeypatch):
     assert r.status_code == 403 and r.json()["error"]["code"] == "reconnect_needed"
     assert session.posted is None
     assert "Reconnect below to allow adding events" in c.get("/setup").text
+
+
+def test_apps_button_only_for_the_listed_accounts(tmp_path):
+    from app.config import Settings as S
+    c = TestClient(main.create_app(S(data_dir=tmp_path, demo=True, apps_url="https://asca.example.com/")))
+    assert c.get("/api/config").json()["appsUrl"] == "https://asca.example.com/"  # everyone
+    c = TestClient(main.create_app(S(data_dir=tmp_path, demo=True, apps_url="https://asca.example.com/",
+                                     apps_for=("carl@example.com",))))
+    assert c.get("/api/config").json()["appsUrl"] is None  # "local network" isn't on the list

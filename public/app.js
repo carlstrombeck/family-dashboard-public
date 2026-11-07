@@ -1531,6 +1531,10 @@ async function init() {
   }
   if (state.config.demo) $("family-title").append(" ", h("span", { class: "pill" }, t.demo));
   $("setup-link").hidden = !(state.config.user && state.config.user.role === "admin"); // /setup is admin-only
+  if (state.config.appsUrl) { // the family's other apps (Split, trip planner, …)
+    $("apps-link").href = state.config.appsUrl;
+    $("apps-link").hidden = false;
+  }
   setUpVoice();
   if (state.config.financesUrl) {
     $("finances-link").href = state.config.financesUrl;

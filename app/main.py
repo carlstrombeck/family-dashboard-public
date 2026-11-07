@@ -275,6 +275,7 @@ def create_app(
             "assistant": assistant is not None and {"name": assistant.name, "aliases": list(settings.assistant_aliases)},
             "split": dict(settings.split_people) or None,
             "financesUrl": settings.finances_url,
+            "appsUrl": settings.apps_url if not settings.apps_for or who.lower() in settings.apps_for else None,
             "defaultCalendar": settings.default_calendar or None,
         }
 

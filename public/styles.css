@@ -111,6 +111,7 @@ h2 { margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -0.01em; }
   color: var(--faint);
 }
 .status .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--faint); }
+.header-links { display: flex; gap: 8px; }
 .setup-link {
   font-size: 14px;
   font-weight: 600;

@@ -55,6 +55,9 @@ class Settings:
     split_people: tuple[tuple[str, str], ...] = ()
     split_ratio_column: str = "first_ratio_ppm"  # where Split keeps the first person's share
     finances_url: str = ""  # a "Family finances" link in the balances panel
+    # An "ASCA" button in the header to the family's other apps, for the listed accounts (empty: everyone).
+    apps_url: str = ""
+    apps_for: tuple[str, ...] = ()
 
     # Google accounts that are always admins; more members can live in the dashboard_members table.
     admins: tuple[str, ...] = ()
@@ -144,4 +147,6 @@ def load_settings(env: Mapping[str, str] = os.environ) -> Settings:
         split_people=_people(env.get("SPLIT_PEOPLE")),
         split_ratio_column=(env.get("SPLIT_RATIO_COLUMN") or defaults.split_ratio_column).strip(),
         finances_url=env.get("FINANCES_URL", "").strip(),
+        apps_url=env.get("APPS_URL", "").strip(),
+        apps_for=tuple(e.lower() for e in _list(env.get("APPS_FOR"))),
     )
