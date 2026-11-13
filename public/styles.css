@@ -263,6 +263,17 @@ h2 { margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -0.01em; }
 .lists .panel { flex: 1 1 0; }
 .side .lists { flex: 1 1 0; }
 .side .accounts { flex: none; }
+.side .photos { flex: none; aspect-ratio: 4 / 3; position: relative; }
+.photos img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity 1.5s ease;
+}
+.photos img.on { opacity: 1; }
 
 .panel-head {
   display: flex;

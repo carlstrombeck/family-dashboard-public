@@ -15,6 +15,7 @@ from typing import Protocol
 import requests
 
 SUPABASE_TABLE = "dashboard_kv"
+PHOTOS_BUCKET = "family-photos"  # a private Supabase Storage bucket for the photo tile
 MEMBERS_TABLE = "dashboard_members"
 # Split, a companion app for two people sharing costs in proportion to income, can keep its tables
 # in the same Supabase project. The dashboard shows its balance and adds expenses by voice; the
@@ -36,6 +37,12 @@ class Store(Protocol):
     def set(self, key: str, value: dict) -> None: ...
 
     def members(self) -> dict[str, str]: ...
+
+    def put_blob(self, name: str, data: bytes, content_type: str) -> None: ...
+
+    def get_blob(self, name: str) -> bytes | None: ...
+
+    def delete_blobs(self, names: list[str]) -> None: ...
 
 
 class FileStore:
@@ -65,6 +72,27 @@ class FileStore:
         except OSError as exc:
             raise StoreError(f"Could not read {key}: {exc}") from exc
 
+    def put_blob(self, name: str, data: bytes, content_type: str) -> None:
+        folder = self._dir / PHOTOS_BUCKET
+        try:
+            folder.mkdir(parents=True, exist_ok=True)
+            (folder / name).write_bytes(data)
+            os.chmod(folder / name, 0o600)
+        except OSError as exc:
+            raise StoreError(f"Could not save {name}: {exc}") from exc
+
+    def get_blob(self, name: str) -> bytes | None:
+        try:
+            return (self._dir / PHOTOS_BUCKET / name).read_bytes()
+        except FileNotFoundError:
+            return None
+        except OSError as exc:
+            raise StoreError(f"Could not read {name}: {exc}") from exc
+
+    def delete_blobs(self, names: list[str]) -> None:
+        for name in names:
+            (self._dir / PHOTOS_BUCKET / name).unlink(missing_ok=True)
+
     def set(self, key: str, value: dict) -> None:
         path = self._dir / f"{key}.json"
         try:
@@ -84,6 +112,7 @@ class SupabaseStore:
 
     def __init__(self, url: str, key: str) -> None:
         self._rest = f"{url.rstrip('/')}/rest/v1"
+        self._storage = f"{url.rstrip('/')}/storage/v1/object"
         self._endpoint = f"{self._rest}/{SUPABASE_TABLE}"
         self._headers = {"apikey": key}
         if not key.startswith("sb_"):
@@ -132,6 +161,36 @@ class SupabaseStore:
         except requests.RequestException as exc:
             raise StoreError(f"Could not reach Supabase: {exc}") from exc
         self._check(resp, "write")
+
+    def put_blob(self, name: str, data: bytes, content_type: str) -> None:
+        try:
+            resp = requests.post(
+                f"{self._storage}/{PHOTOS_BUCKET}/{name}", data=data,
+                headers={**self._headers, "Content-Type": content_type, "x-upsert": "true"}, timeout=30,
+            )
+        except requests.RequestException as exc:
+            raise StoreError(f"Could not reach Supabase Storage: {exc}") from exc
+        self._check(resp, "photo upload")
+
+    def get_blob(self, name: str) -> bytes | None:
+        try:
+            resp = requests.get(f"{self._storage}/{PHOTOS_BUCKET}/{name}", headers=self._headers, timeout=30)
+        except requests.RequestException as exc:
+            raise StoreError(f"Could not reach Supabase Storage: {exc}") from exc
+        if resp.status_code in (400, 404) and "not found" in resp.text.lower():
+            return None
+        self._check(resp, "photo download")
+        return resp.content
+
+    def delete_blobs(self, names: list[str]) -> None:
+        if not names:
+            return
+        try:
+            resp = requests.delete(f"{self._storage}/{PHOTOS_BUCKET}", json={"prefixes": names},
+                                   headers=self._headers, timeout=30)
+        except requests.RequestException as exc:
+            raise StoreError(f"Could not reach Supabase Storage: {exc}") from exc
+        self._check(resp, "photo delete")
 
     def members(self) -> dict[str, str]:
         try:

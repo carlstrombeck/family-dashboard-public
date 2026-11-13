@@ -23,6 +23,9 @@
       <li><strong>Gmail (read-only):</strong> only SAS's EuroBonus emails, to show the points balance and tier. No mail is
         shown on the dashboard or stored.</li>
       <li><strong>Split:</strong> who owes whom in the family's own Split app, read from the same database.</li>
+      <li><strong>Google Photos:</strong> only the photos an administrator chooses in Google Photos' own picker, for the
+        dashboard's photo tile. Copies of those photos are kept so the tile can show them; nothing else in Google
+        Photos is read.</li>
       <li><strong>Google Keep:</strong> only notes shared with the family group (like the shopping list), which can be
         viewed, ticked off, reordered and added to. An administrator can hide some of them. Other notes are never shown.</li>
       <li><strong>Voice commands:</strong> the iPad's own speech recognition (Apple) turns speech into text. Only when
@@ -40,7 +43,8 @@
       <li>It is not sold, used for advertising, or used to train AI models. Apart from voice commands (above), it is not
         shared with third parties.</li>
       <li>The only things stored are the Google sign-in tokens needed to stay connected, the list of invited
-        members, the ids of hidden Keep notes and a log of the last 50 voice commands (what was said and what it did, so it can be undone), in the family's own database (Supabase, EU region). Calendar, EuroBonus and Keep content is only kept
+        members, the ids of hidden Keep notes, the photos chosen for the photo tile (in private storage, shown only
+        to signed-in family members) and a log of the last 50 voice commands (what was said and what it did, so it can be undone), in the family's own database (Supabase, EU region). Calendar, EuroBonus and Keep content is only kept
         briefly in memory while the dashboard runs.</li>
       <li>The app's use of information received from Google APIs adheres to the
         <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>,

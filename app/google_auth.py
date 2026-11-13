@@ -23,10 +23,12 @@ AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 # calendar.events writes events but can't list calendars, so both calendar scopes are needed.
 CALENDAR_WRITE_SCOPE = "https://www.googleapis.com/auth/calendar.events"
+PHOTOS_SCOPE = "https://www.googleapis.com/auth/photospicker.mediaitems.readonly"  # only photos chosen in Google's picker
 SCOPES = (
     "https://www.googleapis.com/auth/calendar.readonly",
     CALENDAR_WRITE_SCOPE,
     "https://www.googleapis.com/auth/gmail.readonly",
+    PHOTOS_SCOPE,
 )
 LOGIN_SCOPES = ("openid", "email")
 STATE_TTL = 15 * 60
@@ -80,6 +82,14 @@ class GoogleAuth:
         """Connections made before adding events was possible only hold read access."""
         try:
             return CALENDAR_WRITE_SCOPE in self._record().get("scopes", [])
+        except StoreError:
+            return False
+
+    @property
+    def can_pick_photos(self) -> bool:
+        """Connections made before the photo tile existed can't open Google Photos' picker."""
+        try:
+            return PHOTOS_SCOPE in self._record().get("scopes", [])
         except StoreError:
             return False
 

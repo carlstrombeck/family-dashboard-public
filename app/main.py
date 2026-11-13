@@ -15,11 +15,11 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import requests
 from fastapi import Body, FastAPI, Form, Request
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import accounts, demo, gcal, weather
+from . import accounts, demo, gcal, photos, weather
 from .assistant import Assistant, AssistantError
 from .voicelog import VoiceLog, describe_sv, is_undo, public
 from .auth import REFRESH_AFTER, SESSION_COOKIE, SESSION_DAYS, Members, make_session, read_session, session_key
@@ -344,6 +344,61 @@ def create_app(
             raise ApiError(403, "not_dashboard_event", str(exc)) from exc
         forget_events()
         return {"ok": True}
+
+    # -- photo tile ---------------------------------------------------------------------------
+
+    @app.get("/api/photos")
+    def photo_list():
+        try:
+            return {"photos": [item["id"] for item in photos.index(store)]}
+        except StoreError as exc:
+            raise ApiError(502, "storage_error", str(exc)) from exc
+
+    @app.get("/api/photos/{photo_id}")
+    def photo(photo_id: str):
+        try:
+            if photo_id not in {item["id"] for item in photos.index(store)}:  # only ids we copied ourselves
+                raise ApiError(404, "not_found", "No such photo.")
+            data = store.get_blob(f"{photo_id}.jpg")
+        except StoreError as exc:
+            raise ApiError(502, "storage_error", str(exc)) from exc
+        if data is None:
+            raise ApiError(404, "not_found", "No such photo.")
+        # A photo never changes under its id; family only, so the browser may keep it but nothing shared.
+        return Response(data, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=604800, immutable"})
+
+    def picker(fn: Callable):
+        if not google.can_pick_photos:
+            raise ApiError(409, "photos_not_allowed", "Reconnect Google on /setup to allow Google Photos.")
+        try:
+            return with_google(fn)
+        except photos.PhotosError as exc:
+            raise ApiError(502, "photos_error", str(exc)) from exc
+
+    @app.post("/setup/photos/start")
+    def photos_start():
+        return picker(photos.start)
+
+    @app.get("/setup/photos/{session_id}")
+    def photos_status(session_id: str):
+        return {"chosen": picker(lambda s: photos.chosen(s, session_id))}
+
+    @app.post("/setup/photos/{session_id}/copy")
+    def photos_copy(session_id: str, page: str = Body("", embed=True)):
+        return picker(lambda s: photos.copy_page(s, store, session_id, page))
+
+    @app.post("/setup/photos/{session_id}/done")
+    def photos_done(session_id: str):
+        picker(lambda s: photos.finish(s, session_id))
+        return {"ok": True}
+
+    @app.post("/setup/photos-clear")
+    def photos_clear():
+        try:
+            photos.remove_all(store)
+        except StoreError as exc:
+            return RedirectResponse("/setup?error=" + quote(str(exc)) + "#photos", 303)
+        return RedirectResponse("/setup?ok=photos#photos", 303)
 
     @app.get("/api/weather")
     def weather_now():
@@ -716,6 +771,8 @@ def _render_setup(
         parts.append('<p class="notice ok">Saved which notes are shown.</p>')
     if ok == "eurobonus":
         parts.append('<p class="notice ok">Saved the EuroBonus balance.</p>')
+    if ok == "photos":
+        parts.append('<p class="notice ok">Removed all photos from the photo tile.</p>')
     if error:
         parts.append(f'<p class="notice bad">{e(error)}</p>')
 
@@ -842,6 +899,30 @@ def _render_setup(
                      '<input name="points" inputmode="numeric" placeholder="e.g. 147 250" autocomplete="off">'
                      '<button type="submit">Save</button></form></section>')
 
+    # Photos
+    parts.append('<section id="photos"><h2>Photo tile</h2>')
+    try:
+        count = len(photos.index(store))
+    except StoreError as exc:
+        count = 0
+        parts.append(f'<p class="notice bad">{e(str(exc))}</p>')
+    parts.append(f"<p>The dashboard loops <strong id=\"photo-count\">{count}</strong> family photos. Choose them in "
+                 "Google Photos' own picker; the dashboard keeps a copy, so new photos are only added when you "
+                 "choose them here (photos already on the tile are skipped).</p>")
+    if settings.demo or not google.connected:
+        parts.append("<p>Connect Google above first.</p>")
+    elif not google.can_pick_photos:
+        parts.append('<p class="notice bad">This Google connection can\'t open Google Photos yet. '
+                     'Reconnect above and allow Google Photos.</p>')
+    else:
+        parts.append('<p><button type="button" id="pick-photos">Choose photos in Google Photos</button></p>'
+                     '<p id="photo-status" hidden></p>')
+    if count:
+        parts.append('<form method="post" action="/setup/photos-clear" '
+                     'onsubmit="return confirm(\'Remove all photos from the tile?\')">'
+                     '<button class="secondary" type="submit">Remove all photos</button></form>')
+    parts.append("</section>")
+
     body = "\n".join(parts)
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
@@ -851,7 +932,7 @@ def _render_setup(
 <h1>Dashboard setup</h1>
 {body}
 <p><a class="button secondary" href="/">Open the dashboard</a></p>
-</main></body></html>"""
+</main><script src="/setup-photos.js" defer></script></body></html>"""
 
 
 
