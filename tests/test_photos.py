@@ -73,3 +73,56 @@ def test_photos_need_sign_in(tmp_path):
     c = TestClient(main.create_app(settings))
     assert c.get("/api/photos").status_code == 401
     assert c.get("/api/photos/abc").status_code == 401
+
+
+ALBUM_PAGE = (
+    '<html><script>AF_initDataCallback({data:[null,[['
+    '["AF1Qip1",["https://lh3.googleusercontent.com/pw/AP1GczPhotoOne",4032,3024,null,null,null,null,null,[1]]],'
+    '["AF1Qip2",["https://lh3.googleusercontent.com/pw/AP1GczPhotoTwo",3024,4032]],'
+    '["AF1Qip1",["https://lh3.googleusercontent.com/pw/AP1GczPhotoOne",4032,3024]]'
+    ']],["https://lh3.googleusercontent.com/pw/AP1GczAvatar",64,64],'
+    '["https://lh3.googleusercontent.com/a/ACg8ocProfile",96,96]]});</script></html>'
+)
+
+
+class FakeGoogle:
+    def __init__(self, page=ALBUM_PAGE, status=200):
+        self.page, self.status, self.calls = page, status, []
+
+    def __call__(self, url, headers=None, timeout=None):
+        self.calls.append(url)
+        if "googleusercontent" in url:
+            return SimpleNamespace(ok=True, status_code=200, content=b"JPEG:" + url.encode(), url=url,
+                                   headers={"content-type": "image/jpeg"})
+        return SimpleNamespace(ok=self.status == 200, status_code=self.status, text=self.page,
+                               url="https://photos.google.com/share/AF1Qip/album")
+
+
+def test_album_page_is_read_for_its_photos(monkeypatch):
+    monkeypatch.setattr(photos.requests, "get", FakeGoogle())
+    found = photos.album_photos("https://photos.app.goo.gl/abc")
+    assert [p["url"].rsplit("/", 1)[1] for p in found] == ["AP1GczPhotoOne", "AP1GczPhotoTwo"]
+    assert found[0]["id"] == photos.album_photos("https://photos.app.goo.gl/abc")[0]["id"]  # stable ids
+    import pytest
+    with pytest.raises(photos.PhotosError):
+        photos.album_photos("https://evil.example.com/album")
+
+
+def test_dashboard_follows_the_album_and_keeps_the_last_list(tmp_path, monkeypatch):
+    google = FakeGoogle()
+    monkeypatch.setattr(photos.requests, "get", google)
+    c = TestClient(main.create_app(Settings(data_dir=tmp_path)))
+    r = c.post("/setup/photos-album", data={"url": "https://photos.app.goo.gl/abc"}, follow_redirects=False)
+    assert "ok=album" in r.headers["location"]
+    ids = c.get("/api/photos").json()["photos"]
+    assert len(ids) == 2
+    img = c.get(f"/api/photos/{ids[0]}")
+    assert img.content.startswith(b"JPEG:") and google.calls[-1].endswith(photos.SIZE)
+    assert "2</strong> photos" in c.get("/setup").text
+    # Google failing later: the tile keeps the photos it had.
+    google.status = 500
+    c2 = TestClient(main.create_app(Settings(data_dir=tmp_path)))
+    assert c2.get("/api/photos").json()["photos"] == ids
+    # A link that isn't Google Photos is refused.
+    bad = c.post("/setup/photos-album", data={"url": "https://example.com/x"}, follow_redirects=False)
+    assert "error=" in bad.headers["location"]

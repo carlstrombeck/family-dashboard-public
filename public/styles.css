@@ -795,4 +795,6 @@ body.setup { display: block; height: auto; overflow: auto; }
 .setup .check { display: flex; align-items: center; gap: 10px; }
 .setup .check input { flex: none; width: 22px; height: 22px; padding: 0; margin: 0; accent-color: var(--accent); }
 .setup .keep-notes button { margin-top: 8px; }
+.setup h3 { margin: 18px 0 6px; font-size: 18px; }
+.setup .hint { color: var(--muted); font-size: 15px; margin-top: 4px; }
 .setup button.secondary { background: var(--line); color: var(--text); }

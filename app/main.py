@@ -347,25 +347,71 @@ def create_app(
 
     # -- photo tile ---------------------------------------------------------------------------
 
+    def album() -> list[dict]:
+        """The shared album's photos, read about once an hour; the last good list if Google fails."""
+        def load() -> list[dict]:
+            saved = store.get(photos.ALBUM_KEY) or {}
+            if not saved.get("url"):
+                return []
+            try:
+                found = photos.album_photos(saved["url"])
+            except photos.PhotosError:
+                log.warning("Shared album unavailable; keeping the last list", exc_info=True)
+                return saved.get("last", [])
+            if found != saved.get("last"):
+                store.set(photos.ALBUM_KEY, {"url": saved["url"], "last": found})
+            return found
+        try:
+            return cache.get_or_set(photos.ALBUM_KEY, 3600, load)
+        except StoreError:
+            log.warning("Shared album settings unavailable", exc_info=True)
+            return []
+
     @app.get("/api/photos")
     def photo_list():
         try:
-            return {"photos": [item["id"] for item in photos.index(store)]}
+            copied = [item["id"] for item in photos.index(store)]
         except StoreError as exc:
             raise ApiError(502, "storage_error", str(exc)) from exc
+        return {"photos": [p["id"] for p in album()] + copied}
 
     @app.get("/api/photos/{photo_id}")
     def photo(photo_id: str):
+        # Only ids from the album or from our own copies: nothing in the request builds an address.
+        from_album = next((p for p in album() if p["id"] == photo_id), None)
         try:
-            if photo_id not in {item["id"] for item in photos.index(store)}:  # only ids we copied ourselves
+            if from_album:
+                data, kind = photos.album_photo(from_album["url"])
+            elif photo_id in {item["id"] for item in photos.index(store)}:
+                data, kind = store.get_blob(f"{photo_id}.jpg"), "image/jpeg"
+            else:
                 raise ApiError(404, "not_found", "No such photo.")
-            data = store.get_blob(f"{photo_id}.jpg")
         except StoreError as exc:
             raise ApiError(502, "storage_error", str(exc)) from exc
+        except photos.PhotosError as exc:
+            raise ApiError(502, "photos_error", str(exc)) from exc
         if data is None:
             raise ApiError(404, "not_found", "No such photo.")
         # A photo never changes under its id; family only, so the browser may keep it but nothing shared.
-        return Response(data, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=604800, immutable"})
+        return Response(data, media_type=kind, headers={"Cache-Control": "private, max-age=604800, immutable"})
+
+    @app.post("/setup/photos-album")
+    def photos_album(url: str = Form("")):
+        """Follow a shared album (best a live album); empty stops following it."""
+        url = url.strip()
+        try:
+            if not url:
+                store.set(photos.ALBUM_KEY, {})
+                cache.discard(lambda key: key == photos.ALBUM_KEY)
+                return RedirectResponse("/setup?ok=album#photos", 303)
+            found = photos.album_photos(url)
+            if not found:
+                raise photos.PhotosError("No photos found at that link. Is link sharing on, and is the album empty?")
+            store.set(photos.ALBUM_KEY, {"url": url, "last": found})
+        except (photos.PhotosError, StoreError) as exc:
+            return RedirectResponse("/setup?error=" + quote(str(exc)) + "#photos", 303)
+        cache.discard(lambda key: key == photos.ALBUM_KEY)
+        return RedirectResponse("/setup?ok=album#photos", 303)
 
     def picker(fn: Callable):
         if not google.can_pick_photos:
@@ -772,7 +818,9 @@ def _render_setup(
     if ok == "eurobonus":
         parts.append('<p class="notice ok">Saved the EuroBonus balance.</p>')
     if ok == "photos":
-        parts.append('<p class="notice ok">Removed all photos from the photo tile.</p>')
+        parts.append('<p class="notice ok">Removed the chosen photos from the photo tile.</p>')
+    if ok == "album":
+        parts.append('<p class="notice ok">Saved. The tile follows the album from now on.</p>')
     if error:
         parts.append(f'<p class="notice bad">{e(error)}</p>')
 
@@ -902,25 +950,36 @@ def _render_setup(
     # Photos
     parts.append('<section id="photos"><h2>Photo tile</h2>')
     try:
+        saved_album = store.get(photos.ALBUM_KEY) or {}
         count = len(photos.index(store))
     except StoreError as exc:
-        count = 0
+        saved_album, count = {}, 0
         parts.append(f'<p class="notice bad">{e(str(exc))}</p>')
-    parts.append(f"<p>The dashboard loops <strong id=\"photo-count\">{count}</strong> family photos. Choose them in "
-                 "Google Photos' own picker; the dashboard keeps a copy, so new photos are only added when you "
-                 "choose them here (photos already on the tile are skipped).</p>")
+    album_count = len(saved_album.get("last", []))
+    parts.append("<h3>Follow a shared album (automatic)</h3>"
+                 "<p>Best: a <strong>live album</strong>. In Google Photos, create an album, choose "
+                 "<em>Automatically add photos of people &amp; pets</em> and pick the family's faces; Google keeps "
+                 "adding new photos of them. Then <em>Share → Create link</em> and paste the link here. The dashboard "
+                 "checks the album every hour. Anyone who has the link can see the album, so don't post it anywhere.</p>")
+    if saved_album.get("url"):
+        parts.append(f"<p>Following an album with <strong>{album_count}</strong> photos.</p>")
+    parts.append('<form method="post" action="/setup/photos-album">'
+                 f'<input name="url" type="url" placeholder="https://photos.app.goo.gl/…" value="{e(saved_album.get("url", ""))}">'
+                 '<button type="submit">Save</button></form>'
+                 '<p class="hint">Leave empty and save to stop following it.</p>')
+    parts.append(f"<h3>Or choose photos one by one</h3><p><strong id=\"photo-count\">{count}</strong> photos chosen in "
+                 "Google Photos' own picker; the dashboard keeps a copy of each.</p>")
     if settings.demo or not google.connected:
         parts.append("<p>Connect Google above first.</p>")
     elif not google.can_pick_photos:
-        parts.append('<p class="notice bad">This Google connection can\'t open Google Photos yet. '
-                     'Reconnect above and allow Google Photos.</p>')
+        parts.append('<p>To use the picker, reconnect Google above and allow Google Photos.</p>')
     else:
         parts.append('<p><button type="button" id="pick-photos">Choose photos in Google Photos</button></p>'
                      '<p id="photo-status" hidden></p>')
     if count:
         parts.append('<form method="post" action="/setup/photos-clear" '
-                     'onsubmit="return confirm(\'Remove all photos from the tile?\')">'
-                     '<button class="secondary" type="submit">Remove all photos</button></form>')
+                     'onsubmit="return confirm(\'Remove the chosen photos from the tile?\')">'
+                     '<button class="secondary" type="submit">Remove chosen photos</button></form>')
     parts.append("</section>")
 
     body = "\n".join(parts)
