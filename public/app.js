@@ -1050,8 +1050,47 @@ $("unlock-form").addEventListener("submit", async (event) => {
 
 const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 // The wake word (ASSISTANT_NAME, default "ASCA") and how speech recognition mishears it; set from /api/config.
-let WAKE = /\b(asca)\b[\s,.:!]*/i;
-const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+let WAKE_WORDS = ["asca"];
+let SOUNDS_LIKE_ASCA = true;
+// Letters only, lower case, for comparing what was heard ("Asca," -> "asca").
+const plain = (word) => word.toLowerCase().normalize("NFC").replace(/[^a-zåäöéüæøş]/g, "");
+// Words that sound like "asca": a/o/å, s, k/c/g/sch, and an ending vowel, maybe with n/r/t after it
+// (aska, askan, asker, oskar, haska, asco…). Only counted as the wake word at the start of a sentence,
+// where it's a call and not, say, the ash in a fireplace.
+const ASCA_LIKE = /^h?[aåo]h?s{1,2}(k|c|ch|sch|g|kh)[aeiouyåäö][nrt]?$/;
+
+// Where the wake word is in what was heard: {start, end} in the text, or null.
+function wakeAt(text) {
+  const words = [...text.matchAll(/\S+/g)];
+  // The name itself anywhere in the sentence; a known mishearing ("aska", "ask a") only at its start,
+  // so a word in ordinary conversation doesn't wake it.
+  for (const [n, phrase] of WAKE_WORDS.entries()) {
+    const parts = phrase.split(/\s+/);
+    const lastStart = n === 0 ? words.length - parts.length : Math.min(1, words.length - parts.length);
+    for (let i = 0; i <= lastStart; i++) {
+      if (parts.every((p, j) => plain(words[i + j][0]) === p)) {
+        const last = words[i + parts.length - 1];
+        return { start: words[i].index, end: last.index + last[0].length };
+      }
+    }
+  }
+  // Something that sounds like it, as one of the first two words.
+  if (SOUNDS_LIKE_ASCA) {
+    for (const w of words.slice(0, 2)) {
+      if (ASCA_LIKE.test(plain(w[0]))) return { start: w.index, end: w.index + w[0].length };
+    }
+  }
+  return null;
+}
+
+// What follows the wake word, without the punctuation after it.
+const afterWake = (text, at) => text.slice(at.end).replace(/^[\s,.:!?]+/, "").trim();
+
+// Of Safari's guesses for one stretch of speech, the first that contains the wake word, else its best guess.
+function bestGuess(result) {
+  for (let i = 0; i < result.length; i++) if (wakeAt(result[i].transcript)) return result[i].transcript;
+  return result[0].transcript;
+}
 const HANDS_FREE_KEY = "voiceHandsFree";
 const AWAIT_COMMAND_MS = 8000; // after a bare "ASCA", the next sentence is the command
 const NOTHING_HEARD_MS = 8000; // tap-to-talk gives up if Safari sends nothing at all
@@ -1100,6 +1139,7 @@ function listen(mode) {
   const r = new Recognition();
   r.lang = "sv-SE";
   r.interimResults = true;
+  r.maxAlternatives = 5; // the wake word is often only in the second or third guess
   r.continuous = mode === "wake";
   voice.recognizer = r;
   voice.mode = mode;
@@ -1126,17 +1166,18 @@ function listen(mode) {
       const result = event.results[i];
       if (result.isFinal) {
         heard = "";
-        onHeard(result[0].transcript, mode);
+        onHeard(bestGuess(result), mode);
       } else {
-        interim += result[0].transcript;
+        interim += bestGuess(result);
       }
     }
     if (!interim || voice.recognizer !== r) return;
     heard = interim;
     clearTimeout(voice.timer);
     voice.timer = setTimeout(() => { if (voice.recognizer === r) finish(); }, PAUSE_ENDS_MS);
-    if (mode === "once" || voice.awaitingUntil > Date.now() || WAKE.test(interim)) {
-      voiceBubble(interim.replace(WAKE, "") || t.listening, "listening");
+    const at = wakeAt(interim);
+    if (mode === "once" || voice.awaitingUntil > Date.now() || at) {
+      voiceBubble((at ? afterWake(interim, at) : interim) || t.listening, "listening");
     }
   };
   r.onerror = (event) => {
@@ -1177,14 +1218,14 @@ function listen(mode) {
 function onHeard(transcript, mode) {
   const said = transcript.trim();
   if (!said) return;
+  const wake = wakeAt(said);
   if (mode === "once") {
     stopListening();
-    runCommand(said.replace(WAKE, ""));
+    runCommand(wake ? afterWake(said, wake) : said);
     return;
   }
-  const wake = said.match(WAKE);
   if (wake) {
-    const command = said.slice(wake.index + wake[0].length).trim();
+    const command = afterWake(said, wake);
     if (command) runCommand(command);
     else {
       voice.awaitingUntil = Date.now() + AWAIT_COMMAND_MS;
@@ -1450,7 +1491,8 @@ const splitName = (id) => (state.config.split || {})[id] || id;
 function setUpVoice() {
   if (!state.config.assistant || !Recognition) return;
   const { name, aliases } = state.config.assistant;
-  WAKE = new RegExp(`\\b(${[name, ...aliases].map(escapeRegExp).join("|")})\\b[\\s,.:!]*`, "i");
+  WAKE_WORDS = [name, ...aliases].map((w) => w.split(/\s+/).map(plain).join(" ")).filter(Boolean);
+  SOUNDS_LIKE_ASCA = plain(name) === "asca";
   $("hands-free").textContent = name;
   $("hands-free").setAttribute("aria-label", t.handsFree(name));
   $("vs-close").addEventListener("click", () => { closeSheet(); speechSynthesis.cancel(); });

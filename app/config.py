@@ -88,7 +88,12 @@ def _float(value: str | None) -> float | None:
 
 
 # How Safari's Swedish speech recognition tends to hear the default wake word.
-ASCA_ALIASES = ("aska", "asker", "ask a", "ascha", "ascar")
+# How Swedish (and English) speech recognition tends to hear "ASCA". The iPad also accepts words that
+# sound alike at the start of a sentence (public/app.js, wakeAt), so this list is the common cases.
+ASCA_ALIASES = (
+    "aska", "askan", "asker", "asket", "aske", "ask a", "ask her", "ascha", "ascar", "aşka",
+    "oska", "haska", "asta", "astra", "arska", "assa", "aksa", "asga", "esca", "eska",
+)
 
 
 def _aliases(env: Mapping[str, str]) -> tuple[str, ...]:
