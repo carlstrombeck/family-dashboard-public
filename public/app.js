@@ -5,8 +5,7 @@ const WEEK_MIN_HOURS = 6; // the week view never zooms in closer than this
 const WEEK_DEFAULT_HOURS = [8, 18]; // when the week has no timed events
 const VIEW_KEY = "calendarView";
 const BACK_TO_TODAY_MS = 2 * 60_000; // a browsed week returns to today after two minutes untouched
-const REFRESH = { calendar: 5 * 60_000, lists: 30_000, weather: 15 * 60_000, accounts: 30 * 60_000, photos: 30 * 60_000 };
-const PHOTO_SECONDS = 20; // each family photo stays this long
+const REFRESH = { calendar: 5 * 60_000, lists: 30_000, weather: 15 * 60_000, accounts: 30 * 60_000 };
 const TOMORROW_WEATHER_FROM = 20; // from 20:00 the header shows tomorrow's weather
 const REQUEST_TIMEOUT = 20_000;
 const LINGER_MS = 4_000; // a ticked item stays in place briefly so a wrong tap is easy to undo
@@ -715,43 +714,6 @@ function renderWeather() {
   el.hidden = false;
 }
 
-// ---------- family photos ----------
-
-const photos = { order: [], next: 0, shown: null, timer: null };
-
-async function loadPhotos() {
-  let ids;
-  try {
-    ids = (await api("/api/photos")).photos;
-  } catch {
-    return; // keep what's showing; the tile isn't worth an error on the kitchen screen
-  }
-  if (photos.timer && ids.join() === [...photos.order].sort().join()) return;
-  photos.order = ids.map((id) => [Math.random(), id]).sort((a, b) => a[0] - b[0]).map(([, id]) => id);
-  photos.next = 0;
-  $("photos-panel").hidden = !ids.length;
-  fitSide();
-  clearInterval(photos.timer);
-  photos.timer = null;
-  if (!ids.length) return;
-  showPhoto();
-  if (ids.length > 1) photos.timer = setInterval(showPhoto, PHOTO_SECONDS * 1000);
-}
-
-function showPhoto() {
-  if (document.visibilityState !== "visible" && photos.shown) return;
-  const id = photos.order[photos.next % photos.order.length];
-  photos.next += 1;
-  // Two images cross-fade: load the next one in the hidden image, then swap.
-  const [front, back] = $("photo-a").classList.contains("on") ? [$("photo-a"), $("photo-b")] : [$("photo-b"), $("photo-a")];
-  back.onload = () => {
-    back.classList.add("on");
-    front.classList.remove("on");
-    photos.shown = id;
-  };
-  back.src = `/api/photos/${encodeURIComponent(id)}`;
-}
-
 // ---------- points & balances ----------
 
 async function loadAccounts() {
@@ -952,7 +914,7 @@ function listPanel(key) {
 
 // The right-hand column holds the balances (and the finances link) and the second half of the lists.
 function fitSide() {
-  const empty = $("accounts-panel").hidden && $("photos-panel").hidden && !$("more-lists").childElementCount;
+  const empty = $("accounts-panel").hidden && !$("more-lists").childElementCount;
   $("side").hidden = empty;
   document.body.classList.toggle("no-side", empty);
 }
@@ -1542,7 +1504,6 @@ function loadAll() {
   loadLists();
   loadWeather();
   loadAccounts();
-  loadPhotos();
 }
 
 function every(ms, fn) {
@@ -1611,7 +1572,6 @@ async function init() {
   every(REFRESH.lists, loadLists);
   every(REFRESH.weather, loadWeather);
   every(REFRESH.accounts, loadAccounts);
-  every(REFRESH.photos, loadPhotos);
 }
 
 init();

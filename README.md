@@ -8,7 +8,6 @@ An always-on kitchen dashboard for an iPad: the family's week from Google Calend
 </picture>
 
 - **Calendar:** today and the next six days from the calendars you choose, colour-coded, with the ISO week number. Switch between **Agenda** (a list per day) and **Week** (seven columns on a time grid that zooms to the hours the week's events cover). **‹ ›** (or a sideways swipe) browse earlier and later weeks; the dashboard returns to today after two minutes untouched. Tap **+** to add an event; the toast has an **Undo**.
-- **Photos:** a tile that cross-fades through family photos. Best fed by a Google Photos *live album* (Google adds photos of the faces you choose by itself) whose share link you paste on `/setup`; the dashboard checks it hourly. Google has no API for shared albums, so this reads the album's share page and could break if Google changes it; anyone with the link can see the album. Photos can also be chosen one by one in Google Photos' official picker; those are copied to private storage.
 - **Lists:** Google Keep notes shared with your family. Tick items off, add new ones, or drag them into a new order. Changes reach Keep on your phones within seconds.
 - **Voice:** tap the mic, or switch on hands-free and start with the wake word. It adds list items, calendar events and shared expenses, shows the weather, answers questions ("hur gör man pannkakor?") in a card, and reads its answer aloud. "Ångra" undoes the last command, and a log shows the last 50.
 - **Weather** in the header, and **points & balances**: EuroBonus points from SAS's emails, and who owes whom in Split, a companion cost-sharing app (optional).
@@ -121,7 +120,7 @@ You create your own (free) Google Cloud OAuth client once:
 3. **Google Auth Platform:**
    - *Branding:* app name "Family dashboard", your email.
    - *Audience:* User type **External**.
-   - *Data access:* add the scopes `.../auth/calendar.readonly`, `.../auth/calendar.events`, `.../auth/gmail.readonly` and `.../auth/photospicker.mediaitems.readonly`. Also enable the **Photos Picker API** under *APIs & Services → Library*. (`calendar.events` lets the iPad add events; `calendar.readonly` is still needed to list your calendars.)
+   - *Data access:* add the scopes `.../auth/calendar.readonly`, `.../auth/calendar.events` and `.../auth/gmail.readonly`. (`calendar.events` lets the iPad add events; `calendar.readonly` is still needed to list your calendars.)
    - *Audience → Publish app* so it's **In production**. While the app is in *Testing*, Google expires the sign-in after 7 days and the dashboard would need reconnecting every week. Personal use doesn't need Google's verification. You'll just see an "unverified app" warning when connecting; choose *Advanced → Go to Family dashboard*.
    - *Clients → Create client → Web application.* Under **Authorized redirect URIs**, add the address `/setup` shows:
      - On Vercel: `https://<your-project>.vercel.app/auth/google/callback`
